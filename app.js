@@ -27,6 +27,7 @@ document.addEventListener("input",function(e){if(e.target?.id==="groupSearchInpu
    Les mots de passe ne sont jamais stockés dans localStorage.
 ============================================================ */
 const SB = window.supabaseClient;
+try{window.tafaSearchHistory=JSON.parse(localStorage.getItem("TAFASS_SEARCH_HISTORY")||"[]");if(!Array.isArray(window.tafaSearchHistory))window.tafaSearchHistory=[];}catch(_){window.tafaSearchHistory=[];}
 
 /* ============================================================
    TAFAß V18 — REALTIME CORE
@@ -1297,10 +1298,10 @@ const countryData = [
 const NAV = [
   ["home","home","Actualités"],
   ["friends","friends","Amis"],
-  ["videos","videos","Vidéos"],
+  ["messages","messages","Messages"],
   ["reels","reels","Reels"],
-  ["marketplace","marketplace","Marketplace"],
-  ["notifications","notifications","Notifications"]
+  ["notifications","notifications","Notifications"],
+  ["marketplace","marketplace","Marketplace"]
 ];
 
 function navIcon(name){
@@ -1589,19 +1590,52 @@ function renderHome(){
   if(filter==="media") posts=posts.filter(p=>p.media);
   return `<section class="page-head"><div><span class="eyebrow">TAFAß</span><h1>Actualités</h1><p>Découvrez les publications de votre communauté.</p></div><button class="btn secondary" data-action="refreshFeed">↻ Actualiser</button></section>
     <div class="feed-tabs"><button class="${filter==="all"?"active":""}" data-action="feedFilter" data-filter="all">Pour vous</button><button class="${filter==="friends"?"active":""}" data-action="feedFilter" data-filter="friends">Amis</button><button class="${filter==="media"?"active":""}" data-action="feedFilter" data-filter="media">Médias</button></div>
-    <div class="card composer-card"><div class="composer-trigger" data-action="openComposer" data-kind="post">${avatar(me(),"avatar md")}<span>Quoi de neuf, ${esc(me()?.firstName||"") || "vous"} ?</span><b>＋</b></div><div class="composer-shortcuts"><button data-action="openComposer" data-kind="photo">📷 Photo</button><button data-action="openComposer" data-kind="video">🎥 Vidéo</button><button data-action="openComposer" data-kind="reel">◆ Reel</button><button data-action="createStory">◉ Story</button></div></div>
+    <div class="card composer-card"><div class="composer-trigger" data-action="openComposer" data-kind="post">${avatar(me(),"avatar md")}<span>À quoi pensez-vous ?</span><b>＋</b></div><div class="composer-shortcuts"><button data-action="openComposer" data-kind="photo">📷 Photo</button><button data-action="openComposer" data-kind="video">🎥 Vidéo</button><button data-action="openComposer" data-kind="reel">◆ Reel</button><button data-action="createStory">◉ Story</button></div></div>
     <div class="stories-strip">${(state.stories||[]).slice(0,12).map(s=>{const su=findUser(s.ownerId);return `<button class="story-card" data-action="viewStory" data-id="${esc(s.id)}">${s.media?`<img src="${esc(s.media)}" alt="">`:"<span>＋</span>"}<b>${esc(displayName(su))}</b></button>`}).join("") || `<button class="story-card create" data-action="createStory"><span>＋</span><b>Créer une Story</b></button>`}</div>
     <div class="feed-list">${posts.length?posts.map(renderPost).join(""):`<div class="card empty-state"><div class="empty-icon">⌁</div><h3>Aucune publication pour le moment</h3><p>Commencez par publier quelque chose ou ajoutez des amis.</p><button class="btn primary" data-action="openComposer" data-kind="post">Créer une publication</button></div>`}</div>`;
 }
 function renderFriends(){
-  const all=state.users.filter(u=>u.id!==state.current);
+  const all=(state.users||[]).filter(u=>u.id!==state.current);
   const friends=all.filter(u=>isFriend(u.id));
   const requests=(state.friendRequests||[]).filter(r=>r.to===state.current&&r.status!=="accepted");
-  const list=friendTab==="requests"?requests.map(r=>findUser(r.from)).filter(Boolean):friendTab==="suggestions"?all.filter(u=>!isFriend(u.id)):friends;
-  return `<section class="page-head"><div><span class="eyebrow">COMMUNAUTÉ</span><h1>Amis</h1><p>Gérez vos amis, invitations et suggestions.</p></div><button class="btn primary" data-action="openFindFriends">Trouver des amis</button></section>
-  <div class="feed-tabs"><button class="${friendTab==="friends"?"active":""}" data-action="friendTab" data-tab="friends">Mes amis (${friends.length})</button><button class="${friendTab==="requests"?"active":""}" data-action="friendTab" data-tab="requests">Demandes (${requests.length})</button><button class="${friendTab==="suggestions"?"active":""}" data-action="friendTab" data-tab="suggestions">Suggestions</button></div>
-  <div class="card list-panel">${list.length?list.map(u=>`<div class="list-item friend-row">${avatar(u,"avatar md")}<div class="list-main"><b>${esc(displayName(u))} ${verified(u)}</b><small>@${esc(u.username||"")} · ${isOnline(u)?"En ligne":"Membre de Tafaß"}</small></div>${friendTab==="requests"?`<button class="btn primary" data-action="acceptFriend" data-id="${esc(u.id)}">Accepter</button><button class="btn ghost" data-action="declineFriend" data-id="${esc(u.id)}">Refuser</button>`:isFriend(u.id)?`<button class="btn ghost" data-action="messageUser" data-id="${esc(u.id)}">Message</button>`:`<button class="btn primary" data-action="addFriend" data-id="${esc(u.id)}">Ajouter</button>`}</div>`).join(""):`<div class="empty-state"><h3>Aucun résultat</h3><p>Les personnes et invitations apparaîtront ici.</p></div>`}</div>`;
+  const online=all.filter(isOnline);
+  const list=friendTab==="requests"
+    ? requests.map(r=>findUser(r.from)).filter(Boolean)
+    : friendTab==="suggestions"
+      ? all.filter(u=>!isFriend(u.id)).slice(0,30)
+      : friends;
+
+  return `<section class="social-hub friends-hub">
+    <header class="social-hub-head">
+      <button class="back-inline" data-action="goBack" data-back-target="home" aria-label="Retour">‹</button>
+      <div><h1>Amis</h1><p>${online.length} en ligne · ${friends.length} ami(e)s</p></div>
+      <button class="icon-btn" data-route="search" aria-label="Rechercher">⌕</button>
+    </header>
+    <div class="hub-chips">
+      <button class="${friendTab==="friends"?"active":""}" data-action="friendTab" data-tab="friends">Vos ami(e)s <b>${friends.length}</b></button>
+      <button class="${friendTab==="requests"?"active":""}" data-action="friendTab" data-tab="requests">Invitations <b>${requests.length}</b></button>
+      <button class="${friendTab==="suggestions"?"active":""}" data-action="friendTab" data-tab="suggestions">Suggestions</button>
+    </div>
+    ${friendTab==="requests" ? `<section class="social-section"><div class="social-section-head"><h2>Invitations (${requests.length})</h2><span>Voir tout</span></div>` :
+      friendTab==="suggestions" ? `<section class="social-section"><div class="social-section-head"><h2>Personnes que vous pourriez connaître</h2></div>` :
+      `<section class="social-section"><div class="social-section-head"><h2>Vos ami(e)s</h2><span>${friends.length} au total</span></div>`}
+      <div class="friend-list">
+      ${list.length?list.map(u=>`<article class="friend-card-v2">
+        ${avatar(u,"avatar friend-avatar-v2")}
+        <div class="friend-copy-v2"><b>${esc(displayName(u))} ${verified(u)}</b><small>${isOnline(u)?"🟢 En ligne":(u.mutualFriends?`${u.mutualFriends} ami(e)s en commun`:"Membre de Tafaß")}</small></div>
+        <div class="friend-actions-v2">
+          ${friendTab==="requests"
+            ? `<button class="btn primary" data-action="acceptFriend" data-id="${esc(u.id)}">Confirmer</button><button class="btn ghost" data-action="declineFriend" data-id="${esc(u.id)}">Supprimer</button>`
+            : isFriend(u.id)
+              ? `<button class="btn ghost" data-action="messageUser" data-id="${esc(u.id)}">Message</button>`
+              : `<button class="btn primary" data-action="addFriend" data-id="${esc(u.id)}">Ajouter</button>`}
+        </div>
+      </article>`).join(""):`<div class="card empty-state"><h3>${friendTab==="requests"?"Aucune invitation":"Aucun résultat"}</h3><p>Les personnes, invitations et suggestions apparaîtront ici.</p></div>`}
+      </div>
+    </section>
+  </section>`;
 }
+
 function renderVideos(){
   const posts=(state.posts||[]).filter(p=>canSeePost(p)&&String(p.mediaType||"").startsWith("video")&&p.mediaType!=="reel");
   return `<section class="page-head"><div><span class="eyebrow">VIDÉOS</span><h1>Vidéos</h1><p>Regardez les vidéos publiées par la communauté.</p></div><button class="btn primary" data-action="openComposer" data-kind="video">＋ Publier une vidéo</button></section>
@@ -1621,33 +1655,99 @@ function renderMarketplace(){
 }
 function renderNotifications(){
   const ns=(state.notifications||[]).filter(n=>n.userId===state.current);
-  return `<section class="page-head"><div><span class="eyebrow">ACTIVITÉ</span><h1>Notifications</h1><p>Retrouvez toutes vos interactions récentes.</p></div><div class="head-actions"><button class="btn secondary" data-action="markAllRead">Tout lire</button><button class="btn ghost" data-action="clearNotifications">Effacer</button></div></section>
-  <div class="card notification-list">${ns.length?ns.map(n=>{const a=findUser(n.actorId);return `<button class="notification-row ${n.read?"":"unread"}" data-action="readNotif" data-id="${esc(n.id)}">${avatar(a,"avatar md")}<span><b>${esc(n.text||"Nouvelle activité")}</b><small>${timeAgo(n.createdAt)}</small></span>${n.read?"":"<i></i>"}</button>`}).join(""):`<div class="empty-state"><div class="empty-icon">♢</div><h3>Aucune notification</h3><p>Vous êtes à jour.</p></div>`}</div>`;
+  const unread=ns.filter(n=>!n.read);
+  const earlier=ns.filter(n=>n.read);
+  const row=(n)=>{const a=findUser(n.actorId);return `<button class="notification-row-v2 ${n.read?"":"unread"}" data-action="readNotif" data-id="${esc(n.id)}">
+    ${avatar(a,"avatar md")}<span><b>${esc(n.text||"Nouvelle activité")}</b><small>${timeAgo(n.createdAt)}</small></span>${n.read?"":"<i class=\"notif-dot-v2\"></i>"}<em>•••</em>
+  </button>`};
+  return `<section class="social-hub notifications-hub">
+    <header class="social-hub-head">
+      <button class="back-inline" data-action="goBack" data-back-target="home" aria-label="Retour">‹</button>
+      <div><h1>Notifications</h1><p>${unread.length?`${unread.length} nouvelle(s) notification(s)`:"Vous êtes à jour"}</p></div>
+      <div class="head-icon-group"><button class="icon-btn" data-action="markAllRead" aria-label="Tout lire">✓</button><button class="icon-btn" data-route="search" aria-label="Rechercher">⌕</button></div>
+    </header>
+    ${unread.length?`<section class="social-section notif-section"><div class="social-section-head"><h2>Plus tôt</h2></div><div class="notification-list-v2">${unread.map(row).join("")}</div></section>`:""}
+    <section class="social-section notif-section"><div class="social-section-head"><h2>${unread.length?"Avant":"Plus tôt"}</h2><button class="link-btn" data-action="clearNotifications">Effacer</button></div>
+      <div class="notification-list-v2">${earlier.map(row).join("") || (!unread.length?`<div class="card empty-state"><div class="empty-icon">♢</div><h3>Aucune notification</h3><p>Vous êtes à jour.</p></div>`:"")}</div>
+    </section>
+  </section>`;
 }
 function renderSearch(){
   const q=(window.globalSearchQuery||committedSearchQuery||"").trim().toLowerCase();
-  const people=(state.users||[]).filter(u=>u.id!==state.current&&(!q||`${displayName(u)} ${u.username||""} ${u.email||""}`.toLowerCase().includes(q)));
+  const people=(state.users||[]).filter(u=>u.id!==state.current&&(!q||`${displayName(u)} ${u.username||""}`.toLowerCase().includes(q)));
+  const pages=(state.pages||[]).filter(p=>!q||`${p.name||""} ${p.username||""} ${p.category||""}`.toLowerCase().includes(q));
+  const groups=(state.groups||[]).filter(g=>!q||`${g.name||""} ${g.description||""}`.toLowerCase().includes(q));
   const posts=(state.posts||[]).filter(p=>canSeePost(p)&&(!q||`${p.text||""} ${p.title||""}`.toLowerCase().includes(q)));
-  return `<section class="page-head"><div><span class="eyebrow">RECHERCHE</span><h1>Rechercher</h1><p>Personnes, publications, vidéos, Pages et groupes.</p></div></section>
-  <div class="card search-hero"><input id="searchPageInput" value="${esc(q)}" placeholder="Rechercher sur Tafaß…"><button class="btn primary" id="searchPageBtn">Rechercher</button></div>
-  ${q?`<div class="search-sections"><section><h2>Personnes</h2><div class="card list-panel">${people.slice(0,20).map(u=>`<div class="list-item">${avatar(u,"avatar md")}<div class="list-main"><b>${esc(displayName(u))}</b><small>@${esc(u.username||"")}</small></div><button class="btn ghost" data-action="viewProfile" data-id="${esc(u.id)}">Voir</button></div>`).join("")||"<div class='empty'>Aucune personne.</div>"}</div></section><section><h2>Publications</h2><div class="feed-list">${posts.slice(0,20).map(renderPost).join("")||"<div class='card empty'>Aucune publication.</div>"}</div></section></div>`:`<div class="card empty-state"><div class="empty-icon">⌕</div><h3>Commencez votre recherche</h3><p>Trouvez des personnes et du contenu sur Tafaß.</p></div>`}`;
+  const recent=Array.isArray(window.tafaSearchHistory)?window.tafaSearchHistory.slice(0,6):[];
+
+  return `<section class="social-hub search-hub">
+    <header class="social-hub-head">
+      <button class="back-inline" data-action="goBack" data-back-target="home" aria-label="Retour">‹</button>
+      <div><h1>Rechercher</h1><p>Personnes, Pages, groupes et publications</p></div>
+    </header>
+    <form class="search-page-box-v2" id="searchPageForm"><span>⌕</span><input id="searchPageInput" value="${esc(q)}" placeholder="Rechercher sur Tafaß…" autocomplete="off"><button class="btn primary" id="searchPageBtn">Rechercher</button></form>
+    ${!q?`<section class="social-section search-recent-v2"><div class="social-section-head"><h2>Récentes</h2>${recent.length?`<button class="link-btn" data-action="clearSearchHistory">Effacer</button>`:""}</div>
+      ${recent.length?recent.map(x=>`<button class="recent-search-row-v2" data-search-term="${esc(x)}">${avatar({avatar:DEFAULT_AVATAR_SVG,name:x},"avatar sm")}<span>${esc(x)}</span><b>⋯</b></button>`).join(""):`<div class="card empty-state"><div class="empty-icon">⌕</div><h3>Aucune recherche récente</h3><p>Commencez une recherche pour retrouver rapidement vos contacts et contenus.</p></div>`}
+    </section>`:`<div class="search-results-v2">
+      <section class="social-section"><div class="social-section-head"><h2>Personnes</h2><span>${people.length}</span></div><div class="card list-panel">${people.slice(0,20).map(u=>`<div class="list-item">${avatar(u,"avatar md")}<div class="list-main"><b>${esc(displayName(u))}</b><small>@${esc(u.username||"")}</small></div><button class="btn ghost" data-action="viewProfile" data-id="${esc(u.id)}">Voir</button></div>`).join("")||"<div class='empty-state'><p>Aucune personne trouvée.</p></div>"}</div></section>
+      <section class="social-section"><div class="social-section-head"><h2>Pages</h2><span>${pages.length}</span></div><div class="card list-panel">${pages.slice(0,10).map(p=>`<div class="list-item">${avatar(p,"avatar md")}<div class="list-main"><b>${esc(p.name||"Page")}</b><small>${esc(p.category||"Page")}</small></div><button class="btn ghost" data-action="viewPage" data-id="${esc(p.id)}">Voir</button></div>`).join("")||"<div class='empty-state'><p>Aucune Page trouvée.</p></div>"}</div></section>
+      <section class="social-section"><div class="social-section-head"><h2>Groupes</h2><span>${groups.length}</span></div><div class="card list-panel">${groups.slice(0,10).map(g=>`<div class="list-item"><div class="avatar md">👥</div><div class="list-main"><b>${esc(g.name||"Groupe")}</b><small>${esc(g.privacy||"Public")}</small></div><button class="btn ghost" data-action="viewGroup" data-id="${esc(g.id)}">Voir</button></div>`).join("")||"<div class='empty-state'><p>Aucun Groupe trouvé.</p></div>"}</div></section>
+      <section class="social-section"><div class="social-section-head"><h2>Publications</h2><span>${posts.length}</span></div><div class="feed-list">${posts.slice(0,20).map(renderPost).join("")||"<div class='card empty-state'><p>Aucune publication trouvée.</p></div>"}</div></section>
+    </div>`}
+  </section>`;
 }
 function renderMessages(){
   const convMap=new Map();
-  (state.messages||[]).forEach(m=>{const other=m.from===state.current?m.to:m.from;if(!other)return;if(!convMap.has(other))convMap.set(other,m);});
+  (state.messages||[]).forEach(m=>{const other=m.from===state.current?m.to:m.from;if(!other)return;if(!convMap.has(other)||new Date(m.createdAt)>new Date(convMap.get(other).createdAt))convMap.set(other,m);});
   const selected=activeConversation?state.messages.filter(m=>m.from===activeConversation||m.to===activeConversation):[];
   const other=activeConversation?findUser(activeConversation):null;
-  return `<section class="page-head"><div><span class="eyebrow">MESSAGERIE</span><h1>Messages</h1><p>Discutez en privé avec vos contacts.</p></div><button class="btn primary" data-action="newConversation">＋ Nouveau message</button></section>
-  <div class="messages-layout card"><aside class="conversation-list"><input id="conversationSearch" placeholder="Rechercher une conversation…">${[...convMap.entries()].map(([id,m])=>{const u=findUser(id);return `<button class="conversation-item ${activeConversation===id?"active":""}" data-action="selectConversation" data-id="${esc(id)}">${avatar(u,"avatar md")}<span><b>${esc(displayName(u))}</b><small>${esc(m.text||"Fichier")}</small></span></button>`}).join("")||`<div class="empty">Aucune conversation.</div>`}</aside>
-  <section class="chat-panel">${activeConversation&&other?`<header class="chat-head">${avatar(other,"avatar md")}<div><b>${esc(displayName(other))}</b><small>@${esc(other.username||"")}</small></div><button class="icon-btn" data-action="backToMessages">×</button></header><div class="chat-messages">${selected.map(m=>`<div class="message-bubble ${m.from===state.current?"mine":""}"><span>${esc(m.text||"")}</span><small>${timeAgo(m.createdAt)}</small></div>`).join("")||`<div class="empty">Commencez la conversation.</div>`}</div><form class="chat-form" data-chat-form="${esc(activeConversation)}"><input name="text" placeholder="Écrire un message…" autocomplete="off"><button class="btn primary">Envoyer</button></form>`:`<div class="empty-state"><div class="empty-icon">✉</div><h3>Sélectionnez une conversation</h3><p>Choisissez un contact ou créez une nouvelle conversation.</p></div>`}</section></div>`;
+  const notes=[me(),...[...convMap.keys()].map(id=>findUser(id)).filter(Boolean)].slice(0,7);
+
+  return `<section class="social-hub messages-hub">
+    <header class="social-hub-head">
+      <button class="back-inline" data-action="${activeConversation?"backToMessages":"goBack"}" data-back-target="home" aria-label="Retour">‹</button>
+      <div><h1>Messages</h1><p>Vos conversations et contacts en ligne</p></div>
+      <div class="head-icon-group"><button class="icon-btn" data-action="openNotificationSettings" aria-label="Paramètres">⚙</button><button class="icon-btn" data-route="search" aria-label="Rechercher">⌕</button></div>
+    </header>
+    ${!activeConversation?`<div class="notes-strip-v2">${notes.map((u,i)=>`<button class="note-bubble-v2" data-action="messageUser" data-id="${esc(u.id)}">${avatar(u,"avatar note-avatar-v2")}<small>${i===0?"Votre note":esc((displayName(u)||"").split(" ")[0])}</small></button>`).join("")}</div>`:""}
+    <div class="messages-layout-v2 ${activeConversation?"chat-open-v2":""}">
+      <aside class="conversation-list-v2">
+        <div class="messages-search-v2"><span>⌕</span><input id="conversationSearch" placeholder="Rechercher dans les messages…"></div>
+        ${[...convMap.entries()].map(([id,m])=>{const u=findUser(id);const unread=state.messages.filter(x=>x.to===state.current&&x.from===id&&!x.read).length;return `<button class="conversation-item-v2 ${activeConversation===id?"active":""}" data-action="selectConversation" data-id="${esc(id)}">${avatar(u,"avatar md")}<span><b>${esc(displayName(u))}</b><small>${esc(m.text||"Fichier")}</small></span>${unread?`<em>${unread>9?"9+":unread}</em>`:""}</button>`}).join("")||`<div class="empty-state"><h3>Aucune conversation</h3><p>Commencez une nouvelle discussion.</p></div>`}
+      </aside>
+      <section class="chat-panel-v2">${activeConversation&&other?`
+        <header class="chat-head-v2">${avatar(other,"avatar md")}<div><b>${esc(displayName(other))}</b><small>${isOnline(other)?"🟢 En ligne":"Hors ligne"}</small></div><button class="icon-btn" data-action="backToMessages" aria-label="Fermer">×</button></header>
+        <div class="chat-messages-v2">${selected.map(m=>`<div class="message-bubble-v2 ${m.from===state.current?"mine":""}"><span>${esc(m.text||"")}</span><small>${timeAgo(m.createdAt)}</small></div>`).join("")||`<div class="empty-state"><h3>Commencez la conversation</h3><p>Envoyez votre premier message.</p></div>`}</div>
+        <form class="chat-form-v2" data-chat-form="${esc(activeConversation)}"><button type="button" class="icon-btn">＋</button><input name="text" placeholder="Écrire un message…" autocomplete="off"><button class="btn primary">Envoyer</button></form>
+      `:`<div class="empty-state"><div class="empty-icon">✉</div><h3>Sélectionnez une conversation</h3><p>Choisissez un contact ou créez une nouvelle conversation.</p><button class="btn primary" data-action="newConversation">＋ Nouveau message</button></div>`}</section>
+    </div>
+  </section>`;
 }
 function renderProfile(){
   const target=profileViewingId||state.current, u=findUser(target)||me(), own=target===state.current;
   const posts=(state.posts||[]).filter(p=>p.ownerId===target&&canSeePost(p));
   const friends=(state.users||[]).filter(x=>x.id!==target&&isFriend(x.id));
-  return `<section class="profile-page"><div class="profile-cover"></div><div class="profile-card card"><div class="profile-main">${avatar(u,"avatar profile-avatar")}<div><h1>${esc(displayName(u))} ${verified(u)}</h1><p>@${esc(u.username||"")} · ${esc(u.country||"Madagascar")}</p><p>${esc(u.bio||"Bienvenue sur mon profil Tafaß.")}</p></div><div class="profile-actions">${own?`<button class="btn secondary" data-action="editProfile">Modifier le profil</button>`:`<button class="btn primary" data-action="${isFriend(u.id)?"messageUser":"addFriend"}" data-id="${esc(u.id)}">${isFriend(u.id)?"Message":"Ajouter"}</button><button class="btn ghost" data-action="follow" data-id="${esc(u.id)}">Suivre</button>`}</div></div><div class="profile-stats"><button data-action="profileStat" data-stat="friends"><b>${friends.length}</b><span>Amis</span></button><button data-action="profileStat" data-stat="followers"><b>${(state.follows||[]).filter(f=>f.to===target).length}</b><span>Abonnés</span></button><button><b>${posts.length}</b><span>Publications</span></button></div></div>
-  <div class="feed-tabs"><button class="active">Publications</button><button data-action="profileFriendsAll">Amis</button></div><div class="feed-list">${posts.length?posts.map(renderPost).join(""):`<div class="card empty-state"><h3>Aucune publication</h3><p>Les publications de ce profil apparaîtront ici.</p></div>`}</div></section>`;
+  const followers=(state.follows||[]).filter(f=>f.to===target).length;
+  const cover=u.cover||"";
+  return `<section class="facebook-profile-v2">
+    <header class="profile-topbar-v2"><button class="back-inline" data-action="goBack" data-back-target="home">‹</button><b>${esc(displayName(u))}</b><button class="icon-btn" data-action="profileMore" data-id="${esc(target)}">•••</button></header>
+    <div class="profile-cover-v2" style="${cover?`background-image:url('${esc(cover)}')`:""}"><button class="profile-camera-v2" data-action="editProfile">📷</button></div>
+    <div class="profile-body-v2">
+      <div class="profile-identity-v2">
+        <div class="profile-avatar-wrap-v2">${avatar(u,"avatar profile-avatar-v2")}<button class="profile-avatar-camera-v2" data-action="editProfile">📷</button></div>
+        <div class="profile-name-block-v2"><h1>${esc(displayName(u))} ${verified(u)}</h1><b>${friends.length} ami(e)s</b><p>@${esc(u.username||"")} · ${esc(u.country||"Madagascar")}</p></div>
+      </div>
+      <p class="profile-bio-v2">${esc(u.bio||"Bienvenue sur Tafaß. Découvrez mon profil et mes publications.")}</p>
+      <div class="profile-actions-v2">${own?`<button class="btn primary" data-action="editProfile">✎ Modifier le profil</button><button class="btn ghost" data-action="profileOwnMenu">•••</button>`:`<button class="btn primary" data-action="${isFriend(u.id)?"messageUser":"addFriend"}" data-id="${esc(u.id)}">${isFriend(u.id)?"Message":"Ajouter"}</button><button class="btn ghost" data-action="follow" data-id="${esc(u.id)}">Suivre</button><button class="btn ghost" data-action="profileOtherMenu" data-id="${esc(u.id)}">•••</button>`}</div>
+      <nav class="profile-tabs-v2"><button class="${profileTab==="posts"?"active":""}" data-action="profileTab" data-tab="posts">Publications</button><button class="${profileTab==="photos"?"active":""}" data-action="profileTab" data-tab="photos">Photos</button><button class="${profileTab==="reels"?"active":""}" data-action="profileTab" data-tab="reels">Reels</button><button class="${profileTab==="friends"?"active":""}" data-action="profileTab" data-tab="friends">Amis</button></nav>
+      ${profileTab==="friends"?`<section class="profile-info-section-v2"><h2>Amis (${friends.length})</h2><div class="profile-friends-grid-v2">${friends.slice(0,12).map(f=>`<button data-action="viewProfile" data-id="${esc(f.id)}">${avatar(f,"avatar md")}<b>${esc(displayName(f))}</b></button>`).join("")||"<p>Aucun ami à afficher.</p>"}</div></section>`:
+        profileTab==="photos"?`<section class="profile-info-section-v2"><h2>Photos</h2><div class="profile-photo-grid-v2">${posts.filter(p=>p.media&&String(p.mediaType||"").startsWith("image")).map(p=>`<button data-action="viewMedia" data-id="${esc(p.id)}"><img src="${esc(p.media)}" alt=""></button>`).join("")||"<p>Aucune photo publiée.</p>"}</div></section>`:
+        profileTab==="reels"?`<section class="profile-info-section-v2"><h2>Reels</h2><div class="feed-list">${posts.filter(p=>String(p.mediaType||"").includes("reel")).map(renderPost).join("")||"<div class='card empty-state'><p>Aucun Reel publié.</p></div>"}</div></section>`:
+        `<section class="profile-info-section-v2"><div class="profile-details-v2"><div>🎓 <span>Profil Tafaß actif</span></div><div>📍 <span>${esc(u.country||"Madagascar")}</span></div><div>👥 <span>${friends.length} ami(e)s · ${followers} abonné(e)s</span></div></div><h2>Publications</h2><div class="feed-list">${posts.length?posts.map(renderPost).join(""):`<div class="card empty-state"><h3>Aucune publication</h3><p>Les publications de ce profil apparaîtront ici.</p></div>`}</div></section>`}
+    </div>
+  </section>`;
 }
+
 function renderPages(){
   const pages=state.pages||[];
   return `<section class="page-head"><div><span class="eyebrow">COMMUNAUTÉS</span><h1>Pages</h1><p>Découvrez les Pages et gérez les vôtres.</p></div><button class="btn primary" data-action="createPage">＋ Créer une Page</button></section><div class="card list-panel">${pages.length?pages.map(p=>`<div class="list-item"><div class="avatar md">📄</div><div class="list-main"><b>${esc(p.name||"Page")}</b><small>@${esc(p.username||"")} · ${esc(p.category||"")}</small></div><button class="btn ghost" data-action="viewPage" data-id="${esc(p.id)}">Voir</button></div>`).join(""):`<div class="empty-state"><h3>Aucune Page</h3><p>Créez votre première Page.</p></div>`}</div>`;
@@ -1658,51 +1758,83 @@ function renderGroups(){
 }
 function renderMenu(){
   const groups=[
-    {title:"Mon espace",sub:"Votre profil et vos échanges",items:[
-      ["profile","◯","Profil","Accéder à votre profil et le modifier"],
-      ["friends","♧","Amis","Gérer vos amis et demandes"],
-      ["messages","✉","Messages","Conversations et messages privés"],
-      ["notifications","♢","Notifications","Vos alertes et activités récentes"]
+    {title:"Votre espace",sub:"Accès rapide à votre activité",items:[
+      ["profile","◯","Profil","Voir et modifier votre profil"],
+      ["friends","♧","Amis","Invitations, amis et suggestions"],
+      ["messages","✉","Messages","Conversations privées"],
+      ["notifications","♢","Notifications","Votre activité récente"]
     ]},
-    {title:"Contenu & communautés",sub:"Découvrez et gérez votre contenu",items:[
-      ["videos","▶","Vidéos","Regarder et publier des vidéos"],
-      ["reels","◆","Réels","Découvrir les vidéos courtes"],
-      ["pages","▤","Pages","Gérer et découvrir les Pages"],
-      ["groups","◉","Groupes","Communautés et groupes"],
-      ["saved","🔖","Enregistré","Retrouver vos contenus enregistrés"],
-      ["events","◫","Événements","Vos événements et activités"]
+    {title:"Contenus",sub:"Tout ce que vous consultez et enregistrez",items:[
+      ["saved","🔖","Enregistré","Publications sauvegardées"],
+      ["reels","◆","Reels","Vidéos courtes"],
+      ["pages","▤","Pages","Vos Pages et Pages suivies"],
+      ["groups","◉","Groupes","Vos communautés"],
+      ["marketplace","⌂","Marketplace","Acheter et vendre"]
     ]},
-    {title:"Paramètres & confidentialité",sub:"Contrôlez votre compte et votre vie privée",items:[
-      ["settings","⚙","Paramètres","Préférences générales de Tafaß"],
-      ["privacy","◌","Confidentialité","Qui peut voir vos informations"],
-      ["security","🔒","Sécurité","Protection et sécurité du compte"],
-      ["accounts","◎","Comptes","Comptes enregistrés sur cet appareil"],
+    {title:"Paramètres",sub:"Un seul endroit pour gérer vos préférences",items:[
+      ["settings","⚙","Paramètres","Préférences générales"],
+      ["privacy","◌","Confidentialité","Visibilité de vos informations"],
+      ["security","🔒","Sécurité","Compte, mot de passe et protection"],
+      ["accounts","◎","Comptes","Comptes enregistrés"],
       ["language","文","Langue","Langue de l’interface"],
-      ["accessibility","♿","Accessibilité","Adapter Tafaß à vos besoins"],
-      ["devices","▣","Appareils","Vos sessions et appareils"],
+      ["devices","▣","Appareils","Sessions et appareils"],
       ["payments","◇","Paiements","Paiements et services"],
+      ["accessibility","♿","Accessibilité","Options d’accessibilité"],
       ["ads","▥","Publicités","Préférences publicitaires"],
-      ["activity","◷","Activité","Votre historique d’activité"]
+      ["activity","◷","Activité","Historique de votre activité"]
     ]},
-    {title:"Aide & informations",sub:"Assistance et informations sur Tafaß",items:[
-      ["help","?","Aide","Trouver une réponse à vos questions"],
-      ["badge","✓","Badge Bleu","Demande de vérification"],
+    {title:"Aide & informations",sub:"Besoin d’aide ou d’informations ?",items:[
+      ["help","?","Aide","Questions et assistance"],
+      ["badge","✓","Badge Bleu","Vérification du compte"],
       ["terms","§","Conditions","Conditions d’utilisation"],
       ["about","ⓘ","À propos de Tafaß","Informations sur l’application"]
     ]}
   ];
-  return `<section class="page-head"><div><span class="eyebrow">TAFAß</span><h1>Menu</h1><p>Accédez rapidement à votre profil, vos contenus, vos paramètres et votre confidentialité.</p></div></section>
-  <section class="menu-profile-card card" data-route="profile">${avatar(me(),"avatar lg")}<div><span>MON PROFIL</span><h2>${esc(displayName(me()))}</h2><p>@${esc(me()?.username||"")} · Voir et modifier votre profil</p></div><i>›</i></section>
-  <div class="menu-sections">${groups.map(g=>`<section class="menu-section"><header><h2>${esc(g.title)}</h2><p>${esc(g.sub)}</p></header><div class="menu-grid">${g.items.map(([id,icon,label,desc])=>`<button class="menu-card-premium" data-route="${esc(id)}"><span>${icon}</span><div class="menu-card-copy"><strong>${esc(label)}</strong><small>${esc(desc)}</small></div><i>›</i></button>`).join("")}</div></section>`).join("")}</div>
-  <div class="card menu-account">${avatar(me(),"avatar lg")}<div><b>${esc(displayName(me()))}</b><small>@${esc(me()?.username||"")}</small></div><button class="btn ghost danger" data-action="logout">Déconnexion</button></div>`;
+  return `<section class="menu-v2">
+    <header class="menu-head-v2"><button class="back-inline" data-action="goBack" data-back-target="home">‹</button><div><h1>Menu</h1><p>Tout est regroupé ici, sans doublons.</p></div></header>
+    <button class="menu-profile-v2 card" data-route="profile">${avatar(me(),"avatar lg")}<span><b>${esc(displayName(me()))}</b><small>@${esc(me()?.username||"")} · Voir le profil</small></span><i>›</i></button>
+    ${groups.map(g=>`<section class="menu-section-v2"><header><h2>${esc(g.title)}</h2><p>${esc(g.sub)}</p></header><div class="menu-list-v2">${g.items.map(([id,icon,label,desc])=>`<button class="menu-item-v2" data-route="${esc(id)}"><span class="menu-icon-v2">${icon}</span><span><b>${esc(label)}</b><small>${esc(desc)}</small></span><i>›</i></button>`).join("")}</div></section>`).join("")}
+    <button class="menu-logout-v2" data-action="logout">↪ <span>Déconnexion</span></button>
+  </section>`;
 }
+
 function renderSettingsRoute(){
-  const titles={settings:["Paramètres","Gérez les préférences de Tafaß."],privacy:["Confidentialité","Contrôlez qui peut voir vos informations."],security:["Sécurité","Protégez votre compte."],accounts:["Comptes","Gérez les comptes enregistrés sur cet appareil."],language:["Langue","Choisissez la langue de l’interface."],accessibility:["Accessibilité","Adaptez l’expérience à vos besoins."],devices:["Appareils","Consultez vos sessions."],payments:["Paiements","Historique des paiements et services."],badge:["Badge bleu","Demande de vérification."],ads:["Publicités","Préférences publicitaires."],activity:["Activité","Votre historique Tafaß."],help:["Aide","Trouvez les réponses aux questions fréquentes."],terms:["Conditions","Conditions d’utilisation de Tafaß."],about:["À propos de Tafaß","Réseau social moderne pour partager, communiquer et découvrir."]};
+  const titles={settings:["Paramètres","Gérez les préférences de Tafaß."],privacy:["Confidentialité","Contrôlez qui peut voir vos informations."],security:["Sécurité","Protégez votre compte."],accounts:["Comptes","Gérez les comptes enregistrés sur cet appareil."],language:["Langue","Choisissez la langue de l’interface."],accessibility:["Accessibilité","Adaptez l’expérience à vos besoins."],devices:["Appareils","Consultez vos sessions."],payments:["Paiements","Historique des paiements et services."],badge:["Badge bleu","Demande de vérification."],ads:["Publicités","Préférences publicitaires."],activity:["Activité","Votre historique Tafaß."],terms:["Conditions","Conditions d’utilisation de Tafaß."],about:["À propos de Tafaß","Réseau social moderne pour partager, communiquer et découvrir."]};
   const [title,desc]=titles[route]||titles.settings;
-  if(route==="help") return `<section class="page-head"><div><span class="eyebrow">ASSISTANCE</span><h1>Aide</h1><p>${esc(desc)}</p></div></section><div class="menu-grid">${["Compte et connexion","Publications et Stories","Amis et abonnés","Messages et appels","Pages et groupes","Badge bleu","Confidentialité","Sécurité","Marketplace","Recherche"].map(x=>`<button class="menu-card-premium" data-action="helpTopic" data-topic="${esc(x)}"><span>?</span><strong>${esc(x)}</strong><i>›</i></button>`).join("")}</div>`;
-  if(route==="badge") return `<section class="page-head"><div><span class="eyebrow">VÉRIFICATION</span><h1>Badge bleu</h1><p>Demandez la vérification de votre compte.</p></div></section><div class="card empty-state"><div class="empty-icon">✓</div><h3>Badge bleu Tafaß</h3><p>Complétez votre demande de vérification en suivant les étapes proposées.</p><button class="btn primary" data-action="startBadge">Commencer la demande</button></div>`;
-  return `<section class="page-head"><div><span class="eyebrow">PARAMÈTRES</span><h1>${esc(title)}</h1><p>${esc(desc)}</p></div></section><div class="card settings-list">${MENU_ITEMS.filter(x=>["settings","privacy","security","accounts","language","accessibility","devices","payments","ads","activity","help"].includes(x[0])).map(([id,icon,label])=>`<button class="setting-row" data-route="${id}"><span>${icon}</span><div><b>${esc(label)}</b><small>Ouvrir cette rubrique</small></div><i>›</i></button>`).join("")}<button class="setting-row" data-action="changePassword"><span>🔑</span><div><b>Changer le mot de passe</b><small>Mettre à jour votre sécurité</small></div><i>›</i></button><button class="setting-row danger" data-action="logout"><span>↪</span><div><b>Déconnexion</b><small>Quitter la session actuelle</small></div><i>›</i></button></div>`;
+  const settingItems={
+    settings:[
+      ["privacy","◌","Confidentialité","Choisissez qui peut voir vos informations."],
+      ["security","🔒","Sécurité","Mot de passe et protection du compte."],
+      ["accounts","◎","Comptes","Gérez les comptes enregistrés sur cet appareil."],
+      ["language","文","Langue","Langue de l’interface."],
+      ["accessibility","♿","Accessibilité","Adaptez l’expérience à vos besoins."],
+      ["devices","▣","Appareils","Consultez vos sessions et appareils."],
+      ["payments","◇","Paiements","Historique des paiements et services."],
+      ["ads","▥","Publicités","Préférences publicitaires."],
+      ["activity","◷","Activité","Votre historique Tafaß."]
+    ],
+    privacy:[["setPrivacy","◌","Visibilité du profil","Public, amis ou vous uniquement"],["setPrivacy","◎","Publications","Choisissez qui peut voir vos publications"],["setPrivacy","◉","Stories","Contrôlez la visibilité de vos Stories"]],
+    security:[["changePassword","🔑","Changer le mot de passe","Mettre à jour votre mot de passe"],["devices","▣","Appareils connectés","Vérifiez vos sessions actives"]],
+    language:[["languageChoice","文","Langue","Choisissez la langue de l’interface"]],
+    accounts:[["switchAccount","⇄","Changer de compte","Utiliser un autre compte enregistré"],["addAccount","＋","Ajouter un compte","Ajouter un compte sur cet appareil"]],
+    accessibility:[["accessibility","♿","Accessibilité","Réglages d’affichage et d’utilisation"]],
+    devices:[["devices","▣","Appareils","Consultez vos sessions"]],
+    payments:[["payments","◇","Paiements","Historique des paiements et services"]],
+    ads:[["ads","▥","Publicités","Gérez vos préférences publicitaires"]],
+    activity:[["activityHistory","◷","Historique d’activité","Consultez votre activité"]]
+  };
+
+  if(route==="help") return `<section class="settings-page-v2"><header class="settings-head-v2"><button class="back-inline" data-route="menu">‹</button><div><h1>Aide</h1><p>Trouvez rapidement une réponse.</p></div><button class="icon-btn" data-route="search">⌕</button></header><div class="settings-list-v2">${["Compte et connexion","Publications et Stories","Amis et abonnés","Messages et appels","Pages et groupes","Badge bleu","Confidentialité","Sécurité","Marketplace","Recherche"].map(x=>`<button class="settings-item-v2" data-action="helpTopic" data-topic="${esc(x)}"><span>?</span><b>${esc(x)}</b><i>›</i></button>`).join("")}</div></section>`;
+  if(route==="badge") return `<section class="settings-page-v2"><header class="settings-head-v2"><button class="back-inline" data-route="menu">‹</button><div><h1>Badge bleu</h1><p>${esc(desc)}</p></div></header><div class="card settings-feature-v2"><div class="feature-icon-v2">✓</div><h2>Badge Bleu Tafaß</h2><p>Complétez votre demande de vérification en suivant les étapes proposées.</p><button class="btn primary" data-action="startBadge">Commencer</button></div></section>`;
+  if(route==="terms"||route==="about") return `<section class="settings-page-v2"><header class="settings-head-v2"><button class="back-inline" data-route="menu">‹</button><div><h1>${esc(title)}</h1><p>${esc(desc)}</p></div></header><div class="card settings-feature-v2"><h2>${esc(title)}</h2><p>${esc(desc)}</p></div></section>`;
+
+  const items=settingItems[route]||settingItems.settings;
+  return `<section class="settings-page-v2"><header class="settings-head-v2"><button class="back-inline" data-route="${route==="settings"?"menu":"settings"}">‹</button><div><h1>${esc(title)}</h1><p>${esc(desc)}</p></div></header><div class="settings-list-v2">${items.map(([id,icon,label,sub])=>{
+    const action=id==="changePassword"?"data-action=\"changePassword\"":id==="switchAccount"?"data-action=\"switchAccount\"":id==="addAccount"?"data-action=\"addAccount\"":id==="setPrivacy"?"data-route=\"privacy\"":id==="languageChoice"?"data-route=\"language\"":`data-route="${esc(id)}"`;
+    return `<button class="settings-item-v2" ${action}><span>${icon}</span><div><b>${esc(label)}</b><small>${esc(sub)}</small></div><i>›</i></button>`;
+  }).join("")}</div>${route==="settings"?`<button class="menu-logout-v2" data-action="logout">↪ <span>Déconnexion</span></button>`:""}</section>`;
 }
+
 function renderRoute(){
   switch(route){
     case "home": return renderHome();
@@ -1729,7 +1861,28 @@ function renderRoute(){
     case "admin-comments": return renderAdminComments();
     case "admin-messages": return renderAdminMessages();
     case "admin-settings": return renderAdminSettings();
-    case "pageView": {const p=findPage(editingPageId);return p?`<section class="page-head"><button class="btn secondary" data-action="goBack" data-back-target="pages">‹ Retour</button><div><span class="eyebrow">PAGE</span><h1>${esc(p.name||"Page")}</h1><p>${esc(p.description||"")}</p></div></section><div class="card empty-state"><h3>Bienvenue sur cette Page</h3><p>Les publications et informations de la Page apparaîtront ici.</p></div>`:`<div class="card empty-state"><h3>Page introuvable</h3></div>`;}
+    case "pageView": {
+      const p=findPage(editingPageId);
+      if(!p) return `<div class="card empty-state"><h3>Page introuvable</h3><button class="btn primary" data-route="pages">Retour aux Pages</button></div>`;
+      const pposts=(state.posts||[]).filter(x=>x.ownerType==="page"&&String(x.ownerId)===String(p.id)&&canSeePost(x));
+      const isOwner=String(p.ownerId)===String(state.current);
+      const followers=Number(p.followers||p.follower_count||0);
+      const pcover=p.cover||p.cover_url||"";
+      return `<section class="page-profile-v2">
+        <header class="page-profile-top-v2"><button class="back-inline" data-action="goBack" data-back-target="pages">‹</button><b>${esc(p.name||"Page")}</b><button class="icon-btn" data-action="pageMore" data-id="${esc(p.id)}">•••</button></header>
+        <div class="page-cover-v2" style="${pcover?`background-image:url('${esc(pcover)}')`:""}"><button class="profile-camera-v2" ${isOwner?'data-action="editPage" data-id="'+esc(p.id)+'"':""}>📷</button></div>
+        <div class="page-profile-body-v2">
+          <div class="page-identity-v2">${avatar(p,"avatar page-avatar-v2")}<div><h1>${esc(p.name||"Page")} ${verified(p)}</h1><p>${esc(p.category||"Page")} · ${followers} abonné(e)s</p><small>@${esc(p.username||"")}</small></div></div>
+          <p class="page-description-v2">${esc(p.description||"Bienvenue sur cette Page Tafaß.")}</p>
+          <div class="page-actions-v2">${isOwner?`<button class="btn primary" data-action="editPage" data-id="${esc(p.id)}">✎ Gérer la Page</button>`:`<button class="btn primary" data-action="follow" data-id="${esc(p.id)}">Suivre</button>`}<button class="btn ghost" data-action="shareLink" data-id="${esc(p.id)}">↗ Partager</button><button class="btn ghost" data-action="pageMore" data-id="${esc(p.id)}">•••</button></div>
+          <nav class="profile-tabs-v2"><button class="${pageTab==="posts"?"active":""}" data-action="pageTab" data-tab="posts">Publications</button><button class="${pageTab==="about"?"active":""}" data-action="pageTab" data-tab="about">À propos</button><button class="${pageTab==="photos"?"active":""}" data-action="pageTab" data-tab="photos">Photos</button><button class="${pageTab==="reels"?"active":""}" data-action="pageTab" data-tab="reels">Reels</button></nav>
+          ${pageTab==="about"?`<section class="page-about-v2"><h2>À propos</h2><div>🏷️ <b>Catégorie</b><span>${esc(p.category||"Page")}</span></div>${p.address?`<div>📍 <b>Adresse</b><span>${esc(p.address)}</span></div>`:""}${p.phone?`<div>☎️ <b>Téléphone</b><span>${esc(p.phone)}</span></div>`:""}${p.email?`<div>✉️ <b>E-mail</b><span>${esc(p.email)}</span></div>`:""}${p.website?`<div>🌐 <b>Site web</b><span>${esc(p.website)}</span></div>`:""}${p.hours?`<div>🕒 <b>Horaires</b><span>${esc(p.hours)}</span></div>`:""}${p.services?`<div>✓ <b>Services</b><span>${esc(p.services)}</span></div>`:""}</section>`:
+            pageTab==="photos"?`<section class="profile-info-section-v2"><h2>Photos</h2><div class="profile-photo-grid-v2">${pposts.filter(x=>x.media&&String(x.mediaType||"").startsWith("image")).map(x=>`<button data-action="viewMedia" data-id="${esc(x.id)}"><img src="${esc(x.media)}" alt=""></button>`).join("")||"<p>Aucune photo publiée.</p>"}</div></section>`:
+            pageTab==="reels"?`<section class="feed-list">${pposts.filter(x=>String(x.mediaType||"").includes("reel")).map(renderPost).join("")||"<div class='card empty-state'><p>Aucun Reel publié.</p></div>"}</section>`:
+            `<section class="page-posts-v2"><div class="social-section-head"><h2>Publications</h2><span>${pposts.length}</span></div><div class="feed-list">${pposts.length?pposts.map(renderPost).join(""):`<div class="card empty-state"><h3>Aucune publication</h3><p>Les publications de la Page apparaîtront ici.</p></div>`}</div></section>`}
+        </div>
+      </section>`;
+    }
     default: return renderSettingsRoute();
   }
 }
@@ -1761,7 +1914,9 @@ function setupGlobal(){
     const ms=e.target.closest("#marketSearchBtn");
     if(ms){window.marketSearch=$("marketSearch")?.value||"";render();return;}
     const ps=e.target.closest("#searchPageBtn");
-    if(ps){window.globalSearchQuery=$("searchPageInput")?.value||"";committedSearchQuery=window.globalSearchQuery;const top=$("globalSearch");if(top)top.value=window.globalSearchQuery;render();return;}
+    if(ps){window.globalSearchQuery=$("searchPageInput")?.value||"";committedSearchQuery=window.globalSearchQuery;const top=$("globalSearch");if(top)top.value=window.globalSearchQuery;const q=String(window.globalSearchQuery||"").trim();if(q){window.tafaSearchHistory=[q,...(window.tafaSearchHistory||[]).filter(x=>x!==q)].slice(0,8);try{localStorage.setItem("TAFASS_SEARCH_HISTORY",JSON.stringify(window.tafaSearchHistory))}catch(_){};}render();return;}
+    const rs=e.target.closest("[data-search-term]");
+    if(rs){const q=rs.dataset.searchTerm||"";window.globalSearchQuery=q;committedSearchQuery=q;render();return;}
   });
 }
 function openDeepLink(){
@@ -2108,6 +2263,7 @@ async function handleAction(e,el){
     catch(err){ console.error("saveProfilePrivacy:",err); toast("Impossible d'enregistrer la confidentialité : "+(err?.message||"erreur Supabase")); }
     return;
   }
+  if(a==="clearSearchHistory"){window.tafaSearchHistory=[];try{localStorage.removeItem("TAFASS_SEARCH_HISTORY")}catch(_){};render();return;}
   if(a==="applySettings"){state.settings=state.settings||{};document.querySelectorAll("[data-setting-key]").forEach(x=>{state.settings[x.dataset.settingKey]=x.value});save();toast("Paramètres appliqués");return;}
   if(a==="switchAccount")return openAccountSwitcher();
   if(a==="addAccount"){
@@ -2150,6 +2306,7 @@ async function handleAction(e,el){
   if(a==="deletePage")return deletePage(id);
   if(a==="profileOwnMenu")return profileOwnMenu();
   if(a==="profileOtherMenu")return profileOtherMenu(id);
+  if(a==="pageMore"){const p=findPage(id);if(!p)return;modal("Options de la Page",`<div class="premium-options">${String(p.ownerId)===String(state.current)?`<button class="menu-card-premium" data-action="editPage" data-id="${esc(id)}"><span>✎</span><strong>Modifier la Page</strong></button><button class="menu-card-premium danger" data-action="deletePage" data-id="${esc(id)}"><span>⌫</span><strong>Supprimer la Page</strong></button>`:`<button class="menu-card-premium" data-action="reportProfile" data-id="${esc(id)}"><span>⚑</span><strong>Signaler la Page</strong></button>`}</div>`);return;}
   if(a==="viewAs")return toast("Aperçu public du profil");
   if(a==="profileStatus")return modal("Statut du profil",`<div class="premium-options"><button class="menu-card-premium" data-action="toggleOnline">${isOnline(me())?"🟢 En ligne":"⚪ Hors ligne"}</button></div>`);
   if(a==="toggleOnline"){const u=me();u.online=!u.online;save();closeModal();render();return;}
